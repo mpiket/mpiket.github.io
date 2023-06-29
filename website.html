@@ -107,7 +107,7 @@
         'highway];' +
         'out;';
 
-      var proxyUrl = 'https://osm.hpi.de/overpass/'; // Replace with your actual proxy server URL
+      var proxyUrl = 'https://giluifm80f.execute-api.us-west-2.amazonaws.com/dev/overPassGeoJson'; // Replace with your actual proxy server URL
       var url = `${proxyUrl}?url=${encodeURIComponent(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`)}`;
 
       document.getElementById('progressIndicator').textContent = 'Downloading street network data...';
