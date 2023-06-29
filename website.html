@@ -107,55 +107,22 @@
         'highway];' +
         'out;';
 
-      var proxyUrl = 'https://osm.hpi.de/overpass/'; // Replace with your actual proxy server URL
-      var url = `${proxyUrl}?url=${encodeURIComponent(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`)}`;
+      var proxyUrl = 'https://osm.hpi.de/overpass/?url=';
+      var apiUrl = 'https://overpass-api.de/api/interpreter?data=';
+
+      var url = proxyUrl + encodeURIComponent(apiUrl + encodeURIComponent(query));
 
       document.getElementById('progressIndicator').textContent = 'Downloading street network data...';
 
-      fetch(url)
-        .then(response => {
-          var contentLength = response.headers.get('Content-Length');
-          var total = parseInt(contentLength, 10);
-          var loaded = 0;
+      var script = document.createElement('script');
+      script.src = url + '&callback=handleJSONPResponse';
+      document.head.appendChild(script);
+    }
 
-          var progressIndicator = document.getElementById('progressIndicator');
-          progressIndicator.textContent = 'Downloading street network data... 0%';
-
-          var reader = response.body.getReader();
-
-          return new ReadableStream({
-            start(controller) {
-              function push() {
-                reader.read().then(({ done, value }) => {
-                  if (done) {
-                    progressIndicator.textContent = 'Street network data downloaded successfully.';
-                    controller.close();
-                    return;
-                  }
-
-                  loaded += value.length;
-                  progressIndicator.textContent = `Downloading street network data... ${Math.round((loaded / total) * 100)}%`;
-
-                  controller.enqueue(value);
-                  push();
-                });
-              }
-
-              push();
-            }
-          });
-        })
-        .then(stream => new Response(stream))
-        .then(response => response.json())
-        .then(data => {
-          var streetNetwork = processStreetNetworkData(data);
-          displayStreetNetwork(streetNetwork);
-          displayNetworkData(streetNetwork);
-        })
-        .catch(error => {
-          console.error(error);
-          document.getElementById('progressIndicator').textContent = 'Error retrieving street network data.';
-        });
+    function handleJSONPResponse(data) {
+      var streetNetwork = processStreetNetworkData(data);
+      displayStreetNetwork(streetNetwork);
+      displayNetworkData(streetNetwork);
     }
 
     function processStreetNetworkData(data) {
