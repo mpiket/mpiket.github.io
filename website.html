@@ -69,18 +69,24 @@
       },
     }).addTo(map);
 
+    var currentLayer = null;
+
     map.on('draw:created', function (e) {
+      if (currentLayer) {
+        map.removeLayer(currentLayer);
+      }
       var layer = e.layer;
       drawnItems.addLayer(layer);
+      currentLayer = layer;
       displayCoordinates(layer);
-      retrieveStreetNetwork(layer);
     });
 
     map.on('draw:edited', function (e) {
       var layers = e.layers;
       layers.eachLayer(function (layer) {
-        displayCoordinates(layer);
-        retrieveStreetNetwork(layer);
+        if (layer === currentLayer) {
+          displayCoordinates(layer);
+        }
       });
     });
 
@@ -96,33 +102,90 @@
     }
 
     function retrieveStreetNetwork(layer) {
-  // ...
+      var query = '[out:json];' +
+        'way(around:1000, ' + layer.getLatLngs()[0][0].lat + ', ' + layer.getLatLngs()[0][0].lng + ')[' +
+        'highway];' +
+        'out;';
 
-  // Move the code that initiates the download inside the 'launch' function
-  var proxyUrl = 'https://osm.hpi.de/overpass/'; // Replace with your actual proxy server URL
-  var url = `${proxyUrl}?url=${encodeURIComponent(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`)}`;
+      var proxyUrl = 'https://osm.hpi.de/overpass/'; // Replace with your actual proxy server URL
+      var url = `${proxyUrl}?url=${encodeURIComponent(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`)}`;
 
-  document.getElementById('progressIndicator').textContent = 'Downloading street network data...';
+      document.getElementById('progressIndicator').textContent = 'Downloading street network data...';
 
-  fetch(url)
-    .then(response => response.json())
-    .then(data => {
-      // ...
-    })
-    .catch(error => {
-      console.error(error);
-      document.getElementById('progressIndicator').textContent = 'Error retrieving street network data.';
-    });
-}
+      fetch(url)
+        .then(response => {
+          var contentLength = response.headers.get('Content-Length');
+          var total = parseInt(contentLength, 10);
+          var loaded = 0;
 
-function launch() {
-  var layer = drawnItems.getLayers()[0];
-  if (layer) {
-    retrieveStreetNetwork(layer);
-  } else {
-    document.getElementById('progressIndicator').textContent = 'Please draw a polygon on the map first.';
-  }
-}
+          var progressIndicator = document.getElementById('progressIndicator');
+          progressIndicator.textContent = 'Downloading street network data... 0%';
+
+          var reader = response.body.getReader();
+
+          return new ReadableStream({
+            start(controller) {
+              function push() {
+                reader.read().then(({ done, value }) => {
+                  if (done) {
+                    progressIndicator.textContent = 'Street network data downloaded successfully.';
+                    controller.close();
+                    return;
+                  }
+
+                  loaded += value.length;
+                  progressIndicator.textContent = `Downloading street network data... ${Math.round((loaded / total) * 100)}%`;
+
+                  controller.enqueue(value);
+                  push();
+                });
+              }
+
+              push();
+            }
+          });
+        })
+        .then(stream => new Response(stream))
+        .then(response => response.json())
+        .then(data => {
+          var streetNetwork = processStreetNetworkData(data);
+          displayStreetNetwork(streetNetwork);
+          displayNetworkData(streetNetwork);
+        })
+        .catch(error => {
+          console.error(error);
+          document.getElementById('progressIndicator').textContent = 'Error retrieving street network data.';
+        });
+    }
+
+    function processStreetNetworkData(data) {
+      var streetNetwork = {
+        edges: [],
+        nodes: {}
+      };
+
+      if (data && data.elements) {
+        for (var i = 0; i < data.elements.length; i++) {
+          var element = data.elements[i];
+          if (element.type === 'way') {
+            var way = {
+              id: element.id,
+              nodes: element.nodes
+            };
+            streetNetwork.edges.push(way);
+          } else if (element.type === 'node') {
+            var node = {
+              id: element.id,
+              lat: element.lat,
+              lon: element.lon
+            };
+            streetNetwork.nodes[element.id] = node;
+          }
+        }
+      }
+
+      return streetNetwork;
+    }
 
     function displayStreetNetwork(streetNetwork) {
       // Use a graph visualization library (e.g., vis.js, d3.js) to render the street network graph in the 'streetNetwork' div
@@ -132,7 +195,7 @@ function launch() {
     function displayNetworkData(streetNetwork) {
       // Display the edge and node data in the 'networkData' div using HTML and CSS
       var edgesHtml = streetNetwork.edges.map((edge, index) => {
-        return `<li>Edge ${index + 1}: From (${edge.from.lat}, ${edge.from.lon}) to (${edge.to.lat}, ${edge.to.lon})</li>`;
+        return `<li>Edge ${index + 1}: From (${streetNetwork.nodes[edge.nodes[0]].lat}, ${streetNetwork.nodes[edge.nodes[0]].lon}) to (${streetNetwork.nodes[edge.nodes[edge.nodes.length - 1]].lat}, ${streetNetwork.nodes[edge.nodes[edge.nodes.length - 1]].lon})</li>`;
       }).join('');
 
       var nodesHtml = Object.keys(streetNetwork.nodes).map(nodeId => {
@@ -145,8 +208,11 @@ function launch() {
     }
 
     function launch() {
-      var layer = drawnItems.getLayers()[0];
-      retrieveStreetNetwork(layer);
+      if (currentLayer) {
+        retrieveStreetNetwork(currentLayer);
+      } else {
+        document.getElementById('progressIndicator').textContent = 'Please draw a polygon on the map first.';
+      }
     }
   </script>
 </body>
