@@ -116,21 +116,18 @@
 
       var xhr = new XMLHttpRequest();
       xhr.open('GET', url, true);
-      xhr.onprogress = function (e) {
-        if (e.lengthComputable) {
-          var percentage = Math.round((e.loaded / e.total) * 100);
-          document.getElementById('progressIndicator').textContent = 'Downloading street network data... ' + percentage + '%';
-        }
-      };
-      xhr.onload = function () {
-        if (xhr.status === 200) {
-          var data = JSON.parse(xhr.responseText);
-          var streetNetwork = processStreetNetworkData(data);
-          displayStreetNetwork(streetNetwork);
-          displayNetworkData(streetNetwork);
-          document.getElementById('progressIndicator').textContent = 'Street network data downloaded successfully!';
-        } else {
-          document.getElementById('progressIndicator').textContent = 'Error downloading street network data.';
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest'); // Added X-Requested-With header to the request
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            var data = JSON.parse(xhr.responseText);
+            var streetNetwork = processStreetNetworkData(data);
+            displayStreetNetwork(streetNetwork);
+            displayNetworkData(streetNetwork);
+            document.getElementById('progressIndicator').textContent = 'Street network data downloaded successfully!';
+          } else {
+            document.getElementById('progressIndicator').textContent = 'Error downloading street network data.';
+          }
         }
       };
       xhr.send();
